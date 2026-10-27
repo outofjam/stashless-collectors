@@ -6,7 +6,8 @@ on:
 
 jobs:
   conformance:
-    runs-on: ubuntu-latest
+    # 22.04 still offers Python 3.9, the oldest version the collector supports.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
