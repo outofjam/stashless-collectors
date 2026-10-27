@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stashless.outofjam.com/telemetry/schema/v1",
+  "title": "Stashless telemetry payload, version 1",
+  "description": "What a collector in a customer's estate posts to Stashless about one IFS Cloud environment and, optionally, the PSO environment paired with it. Counts, timings and version strings only: no message content, no user names, no licence identifiers. Unknown fields anywhere are rejected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "collected_at", "collector"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "collected_at": {"type": "string", "format": "date-time", "description": "RFC 3339 with an offset. Within 24 hours before receipt and 5 minutes after."},
+    "collector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implementation", "version"],
+      "properties": {
+        "implementation": {"enum": ["powershell", "python", "docker", "artisan", "other"]},
+        "version": {"type": "string", "maxLength": 20, "pattern": "^[0-9A-Za-z.+-]+$"}
+      }
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ifs": {"$ref": "#/$defs/source"},
+        "pso": {"$ref": "#/$defs/source"}
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base"],
+      "properties": {
+        "base": {"$ref": "#/$defs/version"},
+        "service_update": {"$ref": "#/$defs/version"},
+        "framework_update": {"$ref": "#/$defs/version"},
+        "base_registered_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "server_alerts_last_24h": {"$ref": "#/$defs/count"},
+        "server_alerts_unchecked": {"$ref": "#/$defs/count"},
+        "background_job_errors": {"$ref": "#/$defs/count"},
+        "background_job_warnings": {"$ref": "#/$defs/count"},
+        "background_jobs_total": {"$ref": "#/$defs/count"},
+        "logins_last_7_days": {"$ref": "#/$defs/count"},
+        "last_login_at": {"type": "string", "format": "date-time"},
+        "full_user_licenses": {"$ref": "#/$defs/count"},
+        "pso_batch_queue_jobs": {"$ref": "#/$defs/count"},
+        "active_scheduling_datasets": {"$ref": "#/$defs/count"},
+        "pso_batch_queues_configured": {"$ref": "#/$defs/count"}
+      }
+    },
+    "pso": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "recent_error_count": {"$ref": "#/$defs/count"},
+        "recent_warning_count": {"$ref": "#/$defs/count"},
+        "errors_last_24h": {"$ref": "#/$defs/count"},
+        "last_status_at": {"type": "string", "format": "date-time"},
+        "last_system_test_at": {"type": "string", "format": "date-time"},
+        "last_system_test_successful": {"type": "boolean"},
+        "dse_capability": {"$ref": "#/$defs/decimal"},
+        "live_dataset_footprint": {"$ref": "#/$defs/decimal"},
+        "waiting_dataset_footprint": {"$ref": "#/$defs/decimal"},
+        "resources_count": {"$ref": "#/$defs/count"},
+        "activities_count": {"$ref": "#/$defs/count"},
+        "datasets_count": {"$ref": "#/$defs/count"},
+        "schedule_window_days": {"$ref": "#/$defs/count"},
+        "appointment_window_days": {"$ref": "#/$defs/count"},
+        "version": {"$ref": "#/$defs/version"},
+        "installation_state": {"type": "string", "maxLength": 40, "pattern": "^[A-Za-z ]+$"}
+      }
+    },
+    "message_timings": {
+      "type": "array",
+      "maxItems": 2000,
+      "description": "Hourly buckets per queue and receiver, at most 48 distinct hours, within 7 days before receipt. Digits in a receiver are normalised to # by the server.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["bucket_start", "queue", "receiver", "finished_count", "failed_count", "avg_seconds", "p95_seconds", "max_seconds"],
+        "properties": {
+          "bucket_start": {"type": "string", "format": "date-time", "description": "On the hour."},
+          "queue": {"type": "string", "maxLength": 60, "pattern": "^[A-Za-z0-9_#.()/ -]+$"},
+          "receiver": {"type": "string", "maxLength": 60, "pattern": "^[A-Za-z0-9_#.()/ -]+$"},
+          "finished_count": {"$ref": "#/$defs/count"},
+          "failed_count": {"$ref": "#/$defs/count"},
+          "avg_seconds": {"$ref": "#/$defs/seconds"},
+          "p95_seconds": {"$ref": "#/$defs/seconds"},
+          "max_seconds": {"$ref": "#/$defs/seconds"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "count": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+    "decimal": {"type": "number", "minimum": 0, "maximum": 1000000000, "multipleOf": 0.001},
+    "seconds": {"type": "number", "minimum": 0, "maximum": 1000000000, "multipleOf": 0.001, "description": "avg and p95 never exceed max."},
+    "version": {"type": "string", "maxLength": 40, "pattern": "^[0-9A-Za-z. ]+$"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "last_read_at": {"type": ["string", "null"], "format": "date-time"},
+        "last_error": {"type": ["string", "null"], "maxLength": 120, "pattern": "^[ -~]*$", "description": "Printable ASCII only; shown in the sync history, never stored on the environment."}
+      }
+    }
+  }
+}

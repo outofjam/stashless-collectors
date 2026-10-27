@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "collected_at": "2026-10-26T10:00:12Z",
+  "collector": {
+    "implementation": "python",
+    "version": "1.0.0"
+  },
+  "sources": {
+    "ifs": {
+      "last_read_at": "2026-10-26T10:00:12Z",
+      "last_error": null
+    },
+    "pso": {
+      "last_read_at": "2026-10-26T10:00:12Z",
+      "last_error": null
+    }
+  },
+  "release": {
+    "base": "25.1.0",
+    "service_update": "25.1.5",
+    "framework_update": "25.1.5",
+    "base_registered_at": "2026-03-02T00:00:00Z"
+  },
+  "health": {
+    "server_alerts_last_24h": 3,
+    "server_alerts_unchecked": 1,
+    "background_job_errors": 1,
+    "background_job_warnings": 2,
+    "logins_last_7_days": 341,
+    "last_login_at": "2026-10-26T09:58:00Z",
+    "full_user_licenses": 250,
+    "pso_batch_queue_jobs": 2,
+    "active_scheduling_datasets": 3,
+    "pso_batch_queues_configured": 4
+  },
+  "pso": {
+    "recent_error_count": 0,
+    "recent_warning_count": 1,
+    "errors_last_24h": 1,
+    "last_status_at": "2026-10-26T09:58:00Z",
+    "last_system_test_at": "2026-10-26T04:00:00Z",
+    "last_system_test_successful": true,
+    "dse_capability": 12.5,
+    "live_dataset_footprint": 3.2,
+    "waiting_dataset_footprint": 0.4,
+    "resources_count": 120,
+    "activities_count": 4300,
+    "datasets_count": 3,
+    "schedule_window_days": 15,
+    "appointment_window_days": 30,
+    "version": "6.12.0.4",
+    "installation_state": "Installed"
+  },
+  "message_timings": [
+    {
+      "bucket_start": "2026-10-26T08:00:00Z",
+      "queue": "DEFAULT",
+      "receiver": "CONNECT_REST",
+      "finished_count": 2,
+      "failed_count": 0,
+      "avg_seconds": 1.5,
+      "p95_seconds": 2.0,
+      "max_seconds": 2.0
+    },
+    {
+      "bucket_start": "2026-10-26T09:00:00Z",
+      "queue": "DEFAULT",
+      "receiver": "ERP_NORTH",
+      "finished_count": 1,
+      "failed_count": 0,
+      "avg_seconds": 1.0,
+      "p95_seconds": 1.0,
+      "max_seconds": 1.0
+    },
+    {
+      "bucket_start": "2026-10-26T09:00:00Z",
+      "queue": "PSO_OUT",
+      "receiver": "PSO_#_NORTH",
+      "finished_count": 3,
+      "failed_count": 1,
+      "avg_seconds": 12.667,
+      "p95_seconds": 30.0,
+      "max_seconds": 30.0
+    },
+    {
+      "bucket_start": "2026-10-26T09:00:00Z",
+      "queue": "PSO_OUT",
+      "receiver": "WM Changes AL",
+      "finished_count": 1,
+      "failed_count": 0,
+      "avg_seconds": 4.5,
+      "p95_seconds": 4.5,
+      "max_seconds": 4.5
+    }
+  ]
+}

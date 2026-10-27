@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "STASHLESS_SCHEDULE": "0 0 * * * *",
+    "STASHLESS_ENDPOINT": "https://stashless.outofjam.com/api/telemetry/v1",
+    "STASHLESS_TOKEN": "sl_...",
+    "IFS_URL": "https://customer.ifs.cloud",
+    "IFS_CLIENT_ID": "STASHLESS_READ",
+    "IFS_CLIENT_SECRET": "..."
+  }
+}

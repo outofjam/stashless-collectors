@@ -1,0 +1,213 @@
+{
+  "_note": "Canned IFS Cloud answers keyed by read name (see docs/telemetry/aggregation.md). A missing key is what a refused read (HTTP 403) looks like. Fictional environment; never real customer data. One receiver carries a colon the lane charset refuses, which becomes an underscore.",
+  "token": {
+    "access_token": "fixture-token",
+    "expires_in": 180,
+    "token_type": "Bearer"
+  },
+  "modules": {
+    "value": [
+      {
+        "Module": "FNDBAS",
+        "Name": "IFS Base Functionality",
+        "Version": "25.1.0",
+        "VersionDesc": "25.1.0",
+        "PatchVersion": null,
+        "RegDate": "2026-03-02T00:00:00Z",
+        "Active": true,
+        "IncludedInDelivery": "Yes"
+      },
+      {
+        "Module": "ACCRUL",
+        "Name": "Accounting Rules",
+        "Version": "25.1.0",
+        "VersionDesc": "25.1.0",
+        "PatchVersion": null,
+        "RegDate": "2026-03-02T00:00:00Z",
+        "Active": true,
+        "IncludedInDelivery": "Yes"
+      },
+      {
+        "Module": "CUSTX",
+        "Name": "Customer layer",
+        "Version": "23.2.0",
+        "VersionDesc": "23.2.0",
+        "PatchVersion": null,
+        "RegDate": "2024-11-14T00:00:00Z",
+        "Active": true,
+        "IncludedInDelivery": "No"
+      }
+    ]
+  },
+  "service_update": {
+    "value": "25.1.5"
+  },
+  "framework_update": {
+    "value": "{\"Value\":\"25.1.5\"}"
+  },
+  "server_alerts_last_24h": 3,
+  "server_alerts_unchecked": 1,
+  "job_statuses": {
+    "value": [
+      {
+        "JobId": "1001",
+        "StatusType": "Error"
+      },
+      {
+        "JobId": "1001",
+        "StatusType": "Error"
+      },
+      {
+        "JobId": "1002",
+        "StatusType": "Warning"
+      },
+      {
+        "JobId": "1003",
+        "StatusType": "WARNING"
+      },
+      {
+        "JobId": "1004",
+        "StatusType": "Finished"
+      }
+    ]
+  },
+  "logins_count": 341,
+  "logins_last": {
+    "value": [
+      {
+        "EventTimeUtc": "2026-10-26T09:58:00Z"
+      }
+    ]
+  },
+  "licenses": {
+    "value": [
+      {
+        "Parameter": "CUSTOMER_ID",
+        "Value": "ACME-DROPPED-ON-PURPOSE"
+      },
+      {
+        "Parameter": "INSTALLATION_ID",
+        "Value": "prd-DROPPED-ON-PURPOSE"
+      },
+      {
+        "Parameter": "NUMBER_OF_FULL_USERS",
+        "Value": "250"
+      }
+    ]
+  },
+  "batch_queues": {
+    "value": [
+      {
+        "QueueId": 1,
+        "Description": "Default batch queue"
+      },
+      {
+        "QueueId": 2,
+        "Description": "Scheduling Optimization 1"
+      },
+      {
+        "QueueId": 3,
+        "Description": "Scheduling Optimization 2"
+      }
+    ]
+  },
+  "parallel_batch_queues": {
+    "value": "4"
+  },
+  "scheduling_datasets": {
+    "value": [
+      {
+        "DatasetId": "NORTH",
+        "Active": true,
+        "ProcessType": "Full"
+      },
+      {
+        "DatasetId": "SOUTH",
+        "Active": "TRUE",
+        "ProcessType": "Partial"
+      },
+      {
+        "DatasetId": "EAST",
+        "Active": true,
+        "ProcessType": "Full"
+      },
+      {
+        "DatasetId": "WEST",
+        "Active": false,
+        "ProcessType": "Full"
+      },
+      {
+        "DatasetId": "OLD",
+        "Active": true,
+        "ProcessType": "None"
+      }
+    ]
+  },
+  "messages": {
+    "value": [
+      {
+        "Queue": "PSO_OUT",
+        "StateDb": "Finished",
+        "Receiver": "PSO_2024_NORTH",
+        "CreatedDate": "2026-10-26T09:10:00Z",
+        "StateDate": "2026-10-26T09:10:02Z"
+      },
+      {
+        "Queue": "PSO_OUT",
+        "StateDb": "Finished",
+        "Receiver": "PSO_2024_NORTH",
+        "CreatedDate": "2026-10-26T09:20:00Z",
+        "StateDate": "2026-10-26T09:20:06Z"
+      },
+      {
+        "Queue": "PSO_OUT",
+        "StateDb": "Finished",
+        "Receiver": "PSO_2025_NORTH",
+        "CreatedDate": "2026-10-26T09:30:00Z",
+        "StateDate": "2026-10-26T09:30:30Z"
+      },
+      {
+        "Queue": "PSO_OUT",
+        "StateDb": "Failed",
+        "Receiver": "PSO_2024_NORTH",
+        "CreatedDate": "2026-10-26T09:40:00Z",
+        "StateDate": "2026-10-26T09:59:00Z"
+      },
+      {
+        "Queue": "DEFAULT",
+        "StateDb": "Finished",
+        "Receiver": "CONNECT_REST",
+        "CreatedDate": "2026-10-26T08:15:00Z",
+        "StateDate": "2026-10-26T08:15:01Z"
+      },
+      {
+        "Queue": "DEFAULT",
+        "StateDb": "Finished",
+        "Receiver": "CONNECT_REST",
+        "CreatedDate": "2026-10-26T08:45:00Z",
+        "StateDate": "2026-10-26T08:45:02Z"
+      },
+      {
+        "Queue": "DEFAULT",
+        "StateDb": "Released",
+        "Receiver": "CONNECT_REST",
+        "CreatedDate": "2026-10-26T09:50:00Z",
+        "StateDate": null
+      },
+      {
+        "Queue": "PSO_OUT",
+        "StateDb": "Finished",
+        "Receiver": "WM Changes AL- Task seq - 398604",
+        "CreatedDate": "2026-10-26T09:05:00Z",
+        "StateDate": "2026-10-26T09:05:04.500Z"
+      },
+      {
+        "Queue": "DEFAULT",
+        "StateDb": "Finished",
+        "Receiver": "ERP:NORTH",
+        "CreatedDate": "2026-10-26T09:12:00Z",
+        "StateDate": "2026-10-26T09:12:01Z"
+      }
+    ]
+  }
+}

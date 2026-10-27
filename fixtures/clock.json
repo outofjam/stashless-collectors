@@ -1,0 +1,4 @@
+{
+  "now": "2026-10-26T10:00:12Z",
+  "note": "The collector's clock in fixture mode: collected_at, every window and every last_read_at come from here, so the output is the same on every run."
+}

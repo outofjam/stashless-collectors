@@ -1,0 +1,83 @@
+{
+  "_note": "Canned PSO gateway answers keyed by read name. A missing key is a refused read; a missing file means no PSO is configured. LastSystemTestTime carries a trimmed .NET fraction and the schedule window is a half value, so the editions must parse any fraction and round the half away from zero.",
+  "session": {
+    "SessionToken": "fixture-session"
+  },
+  "systemstatus": {
+    "RecentErrorCount": 0,
+    "RecentWarningCount": 1,
+    "LastStatusTime": "2026-10-26T09:58:00Z",
+    "LastSystemTestTime": "2026-10-26T04:00:00.5Z",
+    "LastSystemTestSuccessful": true,
+    "TotalDSECapability": 12.5,
+    "TotalLiveDatasetFootprint": 3.2,
+    "TotalWaitingDatasetFootprint": 0.4
+  },
+  "events": {
+    "Events": [
+      {
+        "EventTime": "2026-10-26T03:00:00Z",
+        "Severity": "E",
+        "Message": "A message the collector must count and never keep"
+      },
+      {
+        "EventTime": "2026-10-23T03:00:00Z",
+        "Severity": "E",
+        "Message": "Older than a day"
+      }
+    ]
+  },
+  "installations": [
+    {
+      "Version": "6.12.0.4",
+      "State": "Installed",
+      "InstallingVersion": null
+    }
+  ],
+  "usage": {
+    "ScheduleDataUsages": [
+      {
+        "ScheduleDataUsageType": 0,
+        "DatasetId": null,
+        "Value": 100.0,
+        "DatetimeStamp": "2026-10-24T00:00:00"
+      },
+      {
+        "ScheduleDataUsageType": 0,
+        "DatasetId": null,
+        "Value": 120.0,
+        "DatetimeStamp": "2026-10-25T00:00:00"
+      },
+      {
+        "ScheduleDataUsageType": 0,
+        "DatasetId": "NORTH",
+        "Value": 50.0,
+        "DatetimeStamp": "2026-10-25T00:00:00"
+      },
+      {
+        "ScheduleDataUsageType": 1,
+        "DatasetId": null,
+        "Value": 4300.0,
+        "DatetimeStamp": "2026-10-25T00:00:00"
+      },
+      {
+        "ScheduleDataUsageType": 2,
+        "DatasetId": null,
+        "Value": 14.5,
+        "DatetimeStamp": "2026-10-25T00:00:00"
+      },
+      {
+        "ScheduleDataUsageType": 3,
+        "DatasetId": null,
+        "Value": 30.0,
+        "DatetimeStamp": "2026-10-25T00:00:00"
+      },
+      {
+        "ScheduleDataUsageType": 4,
+        "DatasetId": null,
+        "Value": 3.0,
+        "DatetimeStamp": "2026-10-25T00:00:00"
+      }
+    ]
+  }
+}
