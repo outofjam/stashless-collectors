@@ -11,6 +11,8 @@ python3 scripts/diff-payload.py "$out/python.json" fixtures/expected-payload.jso
 
 cmp python/stashless_collector.py azure-function/stashless_collector.py && echo "azure-function: carries the same collector as python/"
 
+python3 scripts/check-permission-set.py ifs/CMDB_READ-permission-set.xml
+
 if command -v pwsh >/dev/null 2>&1; then
     pwsh -NoProfile -NonInteractive -File powershell/Stashless-Collector.ps1 -Fixtures fixtures -Out "$out/powershell.json"
     python3 scripts/diff-payload.py "$out/powershell.json" fixtures/expected-payload.json powershell
