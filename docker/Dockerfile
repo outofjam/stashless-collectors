@@ -1,4 +1,4 @@
-# Stashless reference collector as a container (plan 16, phase 4): the
+# Stashless reference collector as a container: the
 # Python collector with nothing added, for a customer who schedules
 # containers (Azure Container Apps jobs, Kubernetes CronJob, a plain
 # cron with docker run). Build from the collectors directory so the

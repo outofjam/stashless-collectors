@@ -4,8 +4,10 @@ collector implementation name to differ. Exit 1 with the differences."""
 import json
 import sys
 
-got = json.load(open(sys.argv[1]))
-expected = json.load(open(sys.argv[2]))
+with open(sys.argv[1], encoding="utf-8") as handle:
+    got = json.load(handle)
+with open(sys.argv[2], encoding="utf-8") as handle:
+    expected = json.load(handle)
 expected["collector"]["implementation"] = sys.argv[3]
 problems = []
 

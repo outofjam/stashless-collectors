@@ -3,11 +3,11 @@
 What a collector in a customer's estate reads, how it shapes the numbers,
 and what it posts. The payload shape itself is `schema-v1.json` (served
 at `/telemetry/schema/v1`); this document is the part a schema cannot
-say: which reads, which fields, and the arithmetic. The three reference
-collectors (`collectors/powershell`, `collectors/python`,
-`collectors/docker`, which wraps the Python one) implement exactly this,
-and `tests/Feature/Telemetry/CollectorConformanceTest.php` proves they
-produce the same payload from the fixtures in `fixtures/`.
+say: which reads, which fields, and the arithmetic. The four reference
+editions (PowerShell, Python, the Docker image and the Azure Function,
+the last two wrapping the Python one) implement exactly this, and the
+conformance check proves they produce the same payload from the fixtures
+in `fixtures/`.
 
 Every judgement stays on the server. A collector reads, counts, buckets
 and posts. It never decides what is healthy or slow.
@@ -172,4 +172,6 @@ real customer's data. The conformance test runs each collector with
 `--out`, compares the payload with the expected one, then posts it to
 the ingest endpoint under test with the server's clock set to the
 fixture clock, and checks every section was accepted. A runtime the
-machine lacks (`pwsh`, `python3`) skips its case.
+machine lacks (`pwsh`, `python3`) skips its case. In the collectors
+repository, `scripts/conformance.sh` runs the same comparison without a
+server.

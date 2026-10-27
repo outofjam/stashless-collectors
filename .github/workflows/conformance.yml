@@ -13,5 +13,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.9"
+      # The GitHub Ubuntu image ships pwsh, so the PowerShell edition is checked here, not skipped.
       - name: Every edition produces the expected payload from the fixtures
         run: scripts/conformance.sh

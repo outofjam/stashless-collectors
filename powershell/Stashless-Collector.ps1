@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Stashless reference collector, PowerShell edition (plan 16, phase 4).
+Stashless reference collector, PowerShell edition.
 
 .DESCRIPTION
 Runs inside the customer's estate (an Azure Automation runbook, a scheduled
@@ -12,16 +12,27 @@ subject, text or body, drops the licence identifiers it cannot avoid
 reading, and never logs a value it read. Every judgement stays on the
 server.
 
-The contract is docs/telemetry/aggregation.md; the schema is
-docs/telemetry/schema-v1.json (served at /telemetry/schema/v1). The
-Python edition produces the same payload from the same fixtures, which
-the conformance test checks.
+The contract is aggregation.md and the schema is schema-v1.json, both in
+the docs folder of the collectors repository and served by Stashless at
+/telemetry/schema/v1. The Python edition produces the same payload from
+the same fixtures, which the conformance check in the repository verifies.
+
+NETWORK SURFACE, for whoever reviews this file: every request is made
+with -NoProxy and -MaximumRedirection 0 and a 15 second timeout. The
+hosts reached are the IFS Cloud host (one POST to its IAM token endpoint,
+then GETs), the PSO host when configured (one POST to open a session,
+GETs, one DELETE to close it), the Key Vault and the managed identity
+endpoint when secret names are used, and the Stashless endpoint (one
+POST). Nothing else. Every configured URL must be https.
 
 .PARAMETER Endpoint
 https://stashless.example.com/api/telemetry/v1 (or STASHLESS_ENDPOINT).
 
 .PARAMETER Token
 The collector token (or STASHLESS_TOKEN; or STASHLESS_TOKEN_NAME in Key Vault).
+Like IfsClientSecret and PsoPassword, a value given as a parameter shows in
+the process list: use it for a one-off test from a shell, and schedule the
+*_NAME form or an environment variable instead.
 
 .PARAMETER IfsUrl
 https://customer.ifs.cloud (or IFS_URL).
@@ -62,7 +73,8 @@ Print the payload instead of posting.
 
 .NOTES
 Exit code 0 when the report was posted and accepted (or written); 1 when
-IFS could not be signed in to or the post was refused. PowerShell 7.
+IFS could not be signed in to, a secret or the endpoint could not be had,
+or the post was refused. PowerShell 7.
 #>
 [CmdletBinding()]
 param(
@@ -97,7 +109,10 @@ $script:MessageFields = 'Queue,StateDb,Receiver,CreatedDate,StateDate'
 $script:JobStatusTimeFields = @('Timestamp', 'StatusTimestamp', 'StatusDate', 'CreatedDate', 'DateCreated')
 $script:BatchQueueNameFields = @('Description', 'Name', 'QueueName', 'QueueDescription')
 $script:GatewayPath = '/IFSSchedulingRESTfulGateway'
-$script:UsageTypes = @{ 0 = 'resources_count'; 1 = 'activities_count'; 2 = 'schedule_window_days'; 3 = 'appointment_window_days'; 4 = 'datasets_count' }
+$script:UsageTypes = @{
+    0 = 'resources_count'; 1 = 'activities_count'; 2 = 'schedule_window_days'
+    3 = 'appointment_window_days'; 4 = 'datasets_count'
+}
 
 function Write-Log([string] $Message) {
     # Progress to stderr: names reads and counts, never values read.
@@ -109,6 +124,14 @@ function Get-Setting([string] $Value, [string] $EnvName) {
     $fromEnv = [Environment]::GetEnvironmentVariable($EnvName)
     if (-not [string]::IsNullOrWhiteSpace($fromEnv)) { return $fromEnv.Trim() }
     return $null
+}
+
+function Assert-Https([string] $Name, [string] $Url) {
+    # A configured URL must be https, or a bearer token could travel in clear.
+    if (-not $Url.StartsWith('https://', [StringComparison]::OrdinalIgnoreCase)) {
+        throw (New-ReadError "$Name must start with https://")
+    }
+    return $Url.TrimEnd('/')
 }
 
 # ----------------------------------------------------------------------
@@ -184,10 +207,19 @@ function Get-Now {
     return [DateTime]::UtcNow
 }
 
-function Invoke-Http([string] $Method, [string] $Url, [hashtable] $Headers, $Body = $null, [string] $ContentType = $null, [hashtable] $Form = $null) {
-    # One request, no redirects, a fixed timeout; the parsed body, or the
-    # text when it is not JSON (an OData $count answers a bare integer).
-    $arguments = @{ Method = $Method; Uri = $Url; Headers = $Headers; TimeoutSec = $script:TimeoutSeconds; MaximumRedirection = 0; SkipHttpErrorCheck = $true; ErrorAction = 'Stop' }
+function Invoke-Http(
+    [string] $Method, [string] $Url, [hashtable] $Headers,
+    $Body = $null, [string] $ContentType = $null, [hashtable] $Form = $null
+) {
+    # One request: no proxy, no redirects, a fixed timeout. Returns the
+    # parsed body, or the text when it is not JSON (an OData $count answers
+    # a bare integer). Every call in this file goes through here, except the
+    # final post to Stashless, which reads the status itself.
+    $arguments = @{
+        Method = $Method; Uri = $Url; Headers = $Headers
+        TimeoutSec = $script:TimeoutSeconds; NoProxy = $true; MaximumRedirection = 0
+        SkipHttpErrorCheck = $true; ErrorAction = 'Stop'
+    }
     if ($null -ne $Form) { $arguments.Form = $Form }
     elseif ($null -ne $Body) { $arguments.Body = $Body; $arguments.ContentType = $ContentType }
     try {
@@ -227,12 +259,19 @@ function Read-Pso([string] $Name, [string] $Method, [string] $Url, [hashtable] $
 # IFS Cloud: the reads a Stashless pull sync makes, and nothing more
 # ----------------------------------------------------------------------
 
-$script:Ifs = @{ Base = ''; ClientId = ''; Secret = ''; Realm = $null; Zone = $null; Token = $null; Errors = [System.Collections.Generic.List[string]]::new() }
+$script:Ifs = @{
+    Base = ''; ClientId = ''; Secret = ''; Realm = $null; Zone = $null; Token = $null
+    Errors = [System.Collections.Generic.List[string]]::new()
+}
 
 function Get-IfsRealm {
     # The realm named by the environment's own login challenge.
     try {
-        $response = Invoke-WebRequest -Uri "$($script:Ifs.Base)/main/ifsapplications/web/" -TimeoutSec $script:TimeoutSeconds -SkipHttpErrorCheck -ErrorAction Stop
+        $arguments = @{
+            Uri = "$($script:Ifs.Base)/main/ifsapplications/web/"; TimeoutSec = $script:TimeoutSeconds
+            NoProxy = $true; MaximumRedirection = 0; SkipHttpErrorCheck = $true; ErrorAction = 'Stop'
+        }
+        $response = Invoke-WebRequest @arguments
     } catch {
         throw (New-ReadError "could not reach the environment to discover its realm ($($_.Exception.GetType().Name))")
     }
@@ -251,7 +290,9 @@ function Connect-Ifs {
     }
     $realm = if ($script:Ifs.Realm) { $script:Ifs.Realm } else { Get-IfsRealm }
     $url = "$($script:Ifs.Base)/auth/realms/$realm/protocol/openid-connect/token"
-    $body = 'grant_type=client_credentials&client_id=' + [Uri]::EscapeDataString($script:Ifs.ClientId) + '&client_secret=' + [Uri]::EscapeDataString($script:Ifs.Secret) + '&scope=openid'
+    $body = 'grant_type=client_credentials&scope=openid' +
+        '&client_id=' + [Uri]::EscapeDataString($script:Ifs.ClientId) +
+        '&client_secret=' + [Uri]::EscapeDataString($script:Ifs.Secret)
     try {
         $answer = Invoke-Http 'POST' $url @{ Accept = 'application/json' } $body 'application/x-www-form-urlencoded'
     } catch [ReadError] {
@@ -262,13 +303,19 @@ function Connect-Ifs {
     $script:Ifs.Token = [string] $answer.access_token
 }
 
-function Read-Projection([string] $Name, [string] $Projection, [string] $EntitySet, [hashtable] $Query = $null, [string] $Accept = 'application/json') {
+function Read-Projection(
+    [string] $Name, [string] $Projection, [string] $EntitySet,
+    [hashtable] $Query = $null, [string] $Accept = 'application/json'
+) {
     # The OData option names stay raw ($select, never %24select); only the
     # values are percent-encoded, which is what IFS Cloud accepts.
     $url = "$($script:Ifs.Base)/main/ifsapplications/projection/v1/$Projection.svc/$EntitySet"
     if ($Query -and $Query.Count -gt 0) {
         $parts = foreach ($option in $Query.Keys) {
-            $encoded = [Uri]::EscapeDataString([string] $Query[$option]).Replace('%27', "'").Replace('%28', '(').Replace('%29', ')').Replace('%2C', ',').Replace('%3A', ':')
+            $encoded = [Uri]::EscapeDataString([string] $Query[$option])
+            foreach ($pair in @(@('%27', "'"), @('%28', '('), @('%29', ')'), @('%2C', ','), @('%3A', ':'))) {
+                $encoded = $encoded.Replace($pair[0], $pair[1])
+            }
             "$option=$encoded"
         }
         $url += '?' + ($parts -join '&')
@@ -399,20 +446,33 @@ function Get-IfsHealth([DateTime] $Now) {
     # count and are dropped here, on purpose.
     $dayAgo = $Now.AddDays(-1); $weekAgo = $Now.AddDays(-7)
     $health = [ordered]@{}
-    $health.server_alerts_last_24h = Invoke-IfsAttempt 'ServerLogs' { Read-Count 'server_alerts_last_24h' 'ServerAlertLogHandling' 'ServerLogs' "DateCreated ge $(Get-IfsLiteral $dayAgo)" }
-    $health.server_alerts_unchecked = Invoke-IfsAttempt 'ServerLogs' { Read-Count 'server_alerts_unchecked' 'ServerAlertLogHandling' 'ServerLogs' 'Checked eq false' }
+    $health.server_alerts_last_24h = Invoke-IfsAttempt 'ServerLogs' {
+        Read-Count 'server_alerts_last_24h' 'ServerAlertLogHandling' 'ServerLogs' "DateCreated ge $(Get-IfsLiteral $dayAgo)"
+    }
+    $health.server_alerts_unchecked = Invoke-IfsAttempt 'ServerLogs' {
+        Read-Count 'server_alerts_unchecked' 'ServerAlertLogHandling' 'ServerLogs' 'Checked eq false'
+    }
     $jobs = Invoke-IfsAttempt 'DeferredJobStatuses' { Get-JobStatusCounts $dayAgo }
     if ($null -ne $jobs) { $health.background_job_errors = [int] $jobs[0]; $health.background_job_warnings = [int] $jobs[1] }
-    $health.logins_last_7_days = Invoke-IfsAttempt 'LoginEvents' { Read-Count 'logins_count' 'LoginAuditEvents' 'LoginEvents' "EventType eq 'LOGIN' and EventTimeUtc ge $(Get-IfsLiteral $weekAgo)" }
+    $health.logins_last_7_days = Invoke-IfsAttempt 'LoginEvents' {
+        $filter = "EventType eq 'LOGIN' and EventTimeUtc ge $(Get-IfsLiteral $weekAgo)"
+        Read-Count 'logins_count' 'LoginAuditEvents' 'LoginEvents' $filter
+    }
     $lastLogin = Invoke-IfsAttempt 'LoginEvents' {
-        $answer = Read-Projection 'logins_last' 'LoginAuditEvents' 'LoginEvents' @{ '$filter' = "EventType eq 'LOGIN'"; '$orderby' = 'EventTimeUtc desc'; '$top' = '1'; '$select' = 'EventTimeUtc' }
+        $query = @{ '$filter' = "EventType eq 'LOGIN'"; '$orderby' = 'EventTimeUtc desc'; '$top' = '1'; '$select' = 'EventTimeUtc' }
+        $answer = Read-Projection 'logins_last' 'LoginAuditEvents' 'LoginEvents' $query
         $first = Get-Rows $answer | Select-Object -First 1
         if ($first -is [hashtable] -and $first.ContainsKey('EventTimeUtc')) { $first.EventTimeUtc } else { $null }
     }
     $health.last_login_at = if ($lastLogin) { Format-Rfc3339 (Get-IfsTime $lastLogin) } else { $null }
-    $licenses = Invoke-IfsAttempt 'FndLicenses' { Get-Rows (Read-Projection 'licenses' 'LicenseMetricHandling' 'FndLicenses' @{ '$select' = 'Parameter,Value' }) }
+    $licenses = Invoke-IfsAttempt 'FndLicenses' {
+        Get-Rows (Read-Projection 'licenses' 'LicenseMetricHandling' 'FndLicenses' @{ '$select' = 'Parameter,Value' })
+    }
     $users = $null
-    foreach ($row in @($licenses)) { if ($row -is [hashtable] -and $row.Parameter -eq 'NUMBER_OF_FULL_USERS') { $users = [string] $row.Value } }
+    # The licence identifiers sit on the same rows; they are read here and dropped, on purpose.
+    foreach ($row in @($licenses)) {
+        if ($row -is [hashtable] -and $row.Parameter -eq 'NUMBER_OF_FULL_USERS') { $users = [string] $row.Value; break }
+    }
     $health.full_user_licenses = if ($users -and $users.Trim() -match '^\d+$') { [int] $users.Trim() } else { $null }
     $health.pso_batch_queue_jobs = Invoke-IfsAttempt 'BatchQueues' { Get-PsoBatchQueues }
     $configured = Invoke-IfsAttempt 'PARALLEL_BATCH_QUEUES' { Get-SystemParameter 'parallel_batch_queues' 'PARALLEL_BATCH_QUEUES' }
@@ -506,7 +566,10 @@ function Get-MessageBuckets($Messages) {
 # PSO gateway: a session, three reads, the session closed again
 # ----------------------------------------------------------------------
 
-$script:Pso = @{ Base = ''; AccountId = ''; UserName = ''; Password = ''; Token = $null; Errors = [System.Collections.Generic.List[string]]::new() }
+$script:Pso = @{
+    Base = ''; AccountId = ''; UserName = ''; Password = ''; Token = $null
+    Errors = [System.Collections.Generic.List[string]]::new()
+}
 
 function Connect-Pso {
     try {
@@ -553,36 +616,58 @@ function Get-PsoSection([DateTime] $Now) {
     $section = [ordered]@{}
     if ($status -is [hashtable]) {
     $get = { param($Key) if ($status.ContainsKey($Key)) { $status[$Key] } else { $null } }
+    $at = { param($Key) if (& $get $Key) { Format-Rfc3339 (ConvertTo-UtcTime ([string] (& $get $Key))) } else { $null } }
+    $successful = & $get 'LastSystemTestSuccessful'
     $section = [ordered]@{
         recent_error_count          = [int] $(if (& $get 'RecentErrorCount') { & $get 'RecentErrorCount' } else { 0 })
         recent_warning_count        = [int] $(if (& $get 'RecentWarningCount') { & $get 'RecentWarningCount' } else { 0 })
-        last_status_at              = $(if (& $get 'LastStatusTime') { Format-Rfc3339 (ConvertTo-UtcTime ([string] (& $get 'LastStatusTime'))) } else { $null })
-        last_system_test_at         = $(if (& $get 'LastSystemTestTime') { Format-Rfc3339 (ConvertTo-UtcTime ([string] (& $get 'LastSystemTestTime'))) } else { $null })
-        last_system_test_successful = $(if ($null -ne (& $get 'LastSystemTestSuccessful')) { [bool] (& $get 'LastSystemTestSuccessful') } else { $null })
+        last_status_at              = & $at 'LastStatusTime'
+        last_system_test_at         = & $at 'LastSystemTestTime'
+        last_system_test_successful = $(if ($null -ne $successful) { [bool] $successful } else { $null })
         dse_capability              = Get-Decimal (& $get 'TotalDSECapability')
         live_dataset_footprint      = Get-Decimal (& $get 'TotalLiveDatasetFootprint')
         waiting_dataset_footprint   = Get-Decimal (& $get 'TotalWaitingDatasetFootprint')
     }
     }
-    $events = Invoke-PsoAttempt 'events' { $answer = Read-Gateway 'events' 'api/v1/scheduling/events' @{ minimumSeverity = 'E'; earliestTime = (Format-Rfc3339 $since); maximumRows = '500' }; if ($answer -and $answer.ContainsKey('Events')) { @($answer.Events) } else { @() } }
+    # Error events in the last day, counted client side too in case the
+    # gateway ignores earliestTime. The message text is never kept.
+    $events = Invoke-PsoAttempt 'events' {
+        $query = @{ minimumSeverity = 'E'; earliestTime = (Format-Rfc3339 $since); maximumRows = '500' }
+        $answer = Read-Gateway 'events' 'api/v1/scheduling/events' $query
+        if ($answer -and $answer.ContainsKey('Events')) { @($answer.Events) } else { @() }
+    }
     if ($null -ne $events) {
         $count = 0
-        foreach ($event in @($events)) { if ($event -is [hashtable] -and $event.ContainsKey('EventTime') -and $event.EventTime -and (ConvertTo-UtcTime ([string] $event.EventTime)) -ge $since) { $count++ } }
+        foreach ($event in @($events)) {
+            if ($event -isnot [hashtable] -or -not $event.ContainsKey('EventTime') -or -not $event.EventTime) { continue }
+            if ((ConvertTo-UtcTime ([string] $event.EventTime)) -ge $since) { $count++ }
+        }
         $section.errors_last_24h = $count
     }
     $installations = Invoke-PsoAttempt 'installations' { Read-Gateway 'installations' 'api/v1/system/installations' }
-    $first = if ($installations -is [array]) { $installations | Select-Object -First 1 } elseif ($installations -is [hashtable]) { $installations } else { $null }
+    $first = if ($installations -is [array]) { $installations | Select-Object -First 1 }
+        elseif ($installations -is [hashtable]) { $installations } else { $null }
     if ($first -is [hashtable] -and $first.ContainsKey('Version') -and $first.Version) {
         $section.version = [string] $first.Version
         if ($first.ContainsKey('State') -and $first.State) { $section.installation_state = [string] $first.State }
     }
-    $usage = Invoke-PsoAttempt 'usage' { $answer = Read-Gateway 'usage' 'api/v1/scheduling/usage' @{ minimumDateTime = $Now.AddDays(-7).ToString('yyyy-MM-ddTHH:mm:ss'); maximumDateTime = $Now.AddDays(1).ToString('yyyy-MM-ddTHH:mm:ss') }; if ($answer -and $answer.ContainsKey('ScheduleDataUsages')) { @($answer.ScheduleDataUsages) } else { @() } }
+    # The organisation totals: the latest row per usage type with no dataset.
+    $usage = Invoke-PsoAttempt 'usage' {
+        $window = @{
+            minimumDateTime = $Now.AddDays(-7).ToString('yyyy-MM-ddTHH:mm:ss')
+            maximumDateTime = $Now.AddDays(1).ToString('yyyy-MM-ddTHH:mm:ss')
+        }
+        $answer = Read-Gateway 'usage' 'api/v1/scheduling/usage' $window
+        if ($answer -and $answer.ContainsKey('ScheduleDataUsages')) { @($answer.ScheduleDataUsages) } else { @() }
+    }
     $latest = @{}
     foreach ($row in @($usage)) {
-        if ($row -isnot [hashtable] -or ($row.ContainsKey('DatasetId') -and $null -ne $row.DatasetId) -or -not $row.ContainsKey('ScheduleDataUsageType') -or -not $row.ContainsKey('Value') -or $null -eq $row.Value) { continue }
+        if ($row -isnot [hashtable] -or ($row.ContainsKey('DatasetId') -and $null -ne $row.DatasetId)) { continue }
+        if (-not $row.ContainsKey('ScheduleDataUsageType') -or -not $row.ContainsKey('Value') -or $null -eq $row.Value) { continue }
         $kind = [int] $row.ScheduleDataUsageType
         $stamp = [string] $(if ($row.ContainsKey('DatetimeStamp')) { $row.DatetimeStamp } else { '' })
-        if ($script:UsageTypes.ContainsKey($kind) -and (-not $latest.ContainsKey($kind) -or [string]::CompareOrdinal($stamp, $latest[$kind][0]) -ge 0)) {
+        $newer = -not $latest.ContainsKey($kind) -or [string]::CompareOrdinal($stamp, $latest[$kind][0]) -ge 0
+        if ($script:UsageTypes.ContainsKey($kind) -and $newer) {
             $latest[$kind] = @($stamp, [int] [math]::Round([double] $row.Value, 0, [MidpointRounding]::AwayFromZero))
         }
     }
@@ -599,13 +684,16 @@ function Get-PsoSection([DateTime] $Now) {
 function Get-KeyVaultSecret([string] $VaultUrl, [string] $Name) {
     # One secret with the managed identity: the App Service and Automation
     # endpoint when present, IMDS otherwise. The value is returned and never logged.
-    $resource = 'https://vault.azure.net'
+    $resource = [Uri]::EscapeDataString('https://vault.azure.net')
     if ($env:IDENTITY_ENDPOINT -and $env:IDENTITY_HEADER) {
-        $tokenAnswer = Invoke-RestMethod -Uri "$($env:IDENTITY_ENDPOINT)?resource=$([Uri]::EscapeDataString($resource))&api-version=2019-08-01" -Headers @{ 'X-IDENTITY-HEADER' = $env:IDENTITY_HEADER } -TimeoutSec $script:TimeoutSeconds -NoProxy
+        $tokenUrl = "$($env:IDENTITY_ENDPOINT)?resource=$resource&api-version=2019-08-01"
+        $tokenAnswer = Invoke-Http 'GET' $tokenUrl @{ 'X-IDENTITY-HEADER' = $env:IDENTITY_HEADER }
     } else {
-        $tokenAnswer = Invoke-RestMethod -Uri "http://169.254.169.254/metadata/identity/oauth2/token?resource=$([Uri]::EscapeDataString($resource))&api-version=2018-02-01" -Headers @{ Metadata = 'true' } -TimeoutSec $script:TimeoutSeconds -NoProxy
+        $tokenUrl = "http://169.254.169.254/metadata/identity/oauth2/token?resource=$resource&api-version=2018-02-01"
+        $tokenAnswer = Invoke-Http 'GET' $tokenUrl @{ Metadata = 'true' }
     }
-    $secret = Invoke-RestMethod -Uri "$($VaultUrl.TrimEnd('/'))/secrets/$([Uri]::EscapeDataString($Name))?api-version=7.4" -Headers @{ Authorization = "Bearer $($tokenAnswer.access_token)" } -TimeoutSec $script:TimeoutSeconds -MaximumRedirection 0
+    $secretUrl = "$(Assert-Https 'KEY_VAULT_URL' $VaultUrl)/secrets/$([Uri]::EscapeDataString($Name))?api-version=7.4"
+    $secret = Invoke-Http 'GET' $secretUrl @{ Authorization = "Bearer $($tokenAnswer.access_token)" }
     return [string] $secret.value
 }
 
@@ -615,10 +703,9 @@ function Get-SecretSetting([string] $Value, [string] $EnvName, [string] $VaultUr
     $name = Get-Setting $NameParameter "${EnvName}_NAME"
     if (-not ($name -and $VaultUrl)) { return $null }
     # A vault or identity failure names the variable, never the secret name or the URL.
-    try { return Get-KeyVaultSecret $VaultUrl $name } catch {
-        $status = 0
-        try { $status = [int] $_.Exception.Response.StatusCode } catch { $status = 0 }
-        if ($status -gt 0) { throw (New-ReadError "Key Vault read for ${EnvName}_NAME: HTTP $status" $status) }
+    try { return Get-KeyVaultSecret $VaultUrl $name } catch [ReadError] {
+        throw (New-ReadError "Key Vault read for ${EnvName}_NAME: $($_.Exception.Message)" $_.Exception.Status)
+    } catch {
         throw (New-ReadError "Key Vault read for ${EnvName}_NAME: $($_.Exception.GetType().Name)")
     }
 }
@@ -648,11 +735,13 @@ $failed = $false
 
 # IFS Cloud: sign in first, so a wrong secret or an unreachable IAM is one
 # clear error; after that each read only costs its own figure.
-$script:Ifs.Base = ($(if (Get-Setting $IfsUrl 'IFS_URL') { Get-Setting $IfsUrl 'IFS_URL' } else { 'https://fixture.invalid' })).TrimEnd('/')
+$ifsUrl = Get-Setting $IfsUrl 'IFS_URL'
+if (-not $ifsUrl -and $script:FixtureData) { $ifsUrl = 'https://fixture.invalid' }
 $script:Ifs.ClientId = [string] (Get-Setting $IfsClientId 'IFS_CLIENT_ID')
 $script:Ifs.Realm = Get-Setting $IfsRealm 'IFS_REALM'
 $script:Ifs.Zone = Get-Setting $IfsServerTimeZone 'IFS_SERVER_TIMEZONE'
 try {
+    $script:Ifs.Base = Assert-Https 'IFS_URL' ([string] $ifsUrl)
     $script:Ifs.Secret = [string] (Get-SecretSetting $IfsClientSecret 'IFS_CLIENT_SECRET' $vaultUrl $IfsClientSecretName)
     Connect-Ifs
     $release = Get-IfsRelease
@@ -661,39 +750,46 @@ try {
     if ($health.Count -gt 0) { $payload.health = $health }
     # Two hours back, floored to the hour: the server replaces every
     # reported hour whole, so the oldest bucket must be read complete.
-    $windowStart = $now.AddHours(-2); $windowStart = [DateTime]::new($windowStart.Year, $windowStart.Month, $windowStart.Day, $windowStart.Hour, 0, 0, [DateTimeKind]::Utc)
+    $windowStart = $now.AddHours(-2)
+    $windowStart = [DateTime]::new($windowStart.Year, $windowStart.Month, $windowStart.Day, $windowStart.Hour, 0, 0, [DateTimeKind]::Utc)
     $messages = Invoke-IfsAttempt 'ApplicationMessageSet' { Get-IfsMessages $windowStart }
     if ($null -ne $messages) { $payload.message_timings = @(Get-MessageBuckets $messages) }
     $payload.sources.ifs = [ordered]@{ last_read_at = (Format-Rfc3339 (Get-Now)); last_error = (Get-Brief $script:Ifs.Errors) }
-    Write-Log "IFS read: release $(if ($release) { 'yes' } else { 'no' }), $($health.Count) health figures, $(if ($payload.Contains('message_timings')) { $payload.message_timings.Count } else { 0 }) timing buckets."
+    $bucketCount = if ($payload.Contains('message_timings')) { $payload.message_timings.Count } else { 0 }
+    Write-Log "IFS read: release $(if ($release) { 'yes' } else { 'no' }), $($health.Count) health figures, $bucketCount timing buckets."
 } catch [ReadError] {
     $failed = $true
-    $payload.sources.ifs = [ordered]@{ last_read_at = $null; last_error = (Get-Brief (@("sign-in: $($_.Exception.Message)") + @($script:Ifs.Errors))) }
+    $reasons = @("sign-in: $($_.Exception.Message)") + @($script:Ifs.Errors)
+    $payload.sources.ifs = [ordered]@{ last_read_at = $null; last_error = (Get-Brief $reasons) }
     Write-Log "IFS could not be read: $($_.Exception.Message)"
 } catch {
     # The heartbeat still goes out.
     $failed = $true
-    $payload.sources.ifs = [ordered]@{ last_read_at = $null; last_error = (Get-Brief (@("sign-in: unexpected failure ($($_.Exception.GetType().Name))") + @($script:Ifs.Errors))) }
+    $reasons = @("sign-in: unexpected failure ($($_.Exception.GetType().Name))") + @($script:Ifs.Errors)
+    $payload.sources.ifs = [ordered]@{ last_read_at = $null; last_error = (Get-Brief $reasons) }
     Write-Log "IFS could not be read: unexpected failure ($($_.Exception.GetType().Name))."
 }
 
 # PSO, when configured (or when the fixtures carry it).
 $psoHost = Get-Setting $PsoUrl 'PSO_URL'
 if ($psoHost -or ($script:FixtureData -and $null -ne $script:FixtureData.pso)) {
-    $script:Pso.Base = ($(if ($psoHost) { $psoHost } else { 'https://fixture.invalid' })).TrimEnd('/') + $script:GatewayPath
+    if (-not $psoHost) { $psoHost = 'https://fixture.invalid' }
     $script:Pso.AccountId = [string] (Get-Setting $PsoAccountId 'PSO_ACCOUNT_ID')
     $script:Pso.UserName = [string] (Get-Setting $PsoUserName 'PSO_USER_NAME')
     try {
+        $script:Pso.Base = (Assert-Https 'PSO_URL' $psoHost) + $script:GatewayPath
         $script:Pso.Password = [string] (Get-SecretSetting $PsoPassword 'PSO_PASSWORD' $vaultUrl $PsoPasswordName)
         Connect-Pso
         try { $payload.pso = Get-PsoSection $now } finally { Disconnect-Pso }
         $payload.sources.pso = [ordered]@{ last_read_at = (Format-Rfc3339 (Get-Now)); last_error = (Get-Brief $script:Pso.Errors) }
         Write-Log "PSO read: $($payload.pso.Count) figures."
     } catch [ReadError] {
-        $payload.sources.pso = [ordered]@{ last_read_at = $null; last_error = (Get-Brief (@("session: $($_.Exception.Message)") + @($script:Pso.Errors))) }
+        $reasons = @("session: $($_.Exception.Message)") + @($script:Pso.Errors)
+        $payload.sources.pso = [ordered]@{ last_read_at = $null; last_error = (Get-Brief $reasons) }
         Write-Log "PSO could not be read: $($_.Exception.Message)"
     } catch {
-        $payload.sources.pso = [ordered]@{ last_read_at = $null; last_error = (Get-Brief (@("session: unexpected failure ($($_.Exception.GetType().Name))") + @($script:Pso.Errors))) }
+        $reasons = @("session: unexpected failure ($($_.Exception.GetType().Name))") + @($script:Pso.Errors)
+        $payload.sources.pso = [ordered]@{ last_read_at = $null; last_error = (Get-Brief $reasons) }
         Write-Log "PSO could not be read: unexpected failure ($($_.Exception.GetType().Name))."
     }
 }
@@ -710,13 +806,28 @@ if ($Print) {
 }
 
 $endpointUrl = Get-Setting $Endpoint 'STASHLESS_ENDPOINT'
-try { $tokenValue = Get-SecretSetting $Token 'STASHLESS_TOKEN' $vaultUrl $TokenName } catch { Write-Log "The collector token could not be read: $($_.Exception.Message)"; exit 1 }
+try {
+    $tokenValue = Get-SecretSetting $Token 'STASHLESS_TOKEN' $vaultUrl $TokenName
+    if ($endpointUrl) { $endpointUrl = Assert-Https 'STASHLESS_ENDPOINT' $endpointUrl }
+} catch {
+    Write-Log "The collector token or endpoint could not be used: $($_.Exception.Message)"
+    exit 1
+}
 if (-not $endpointUrl -or -not $tokenValue) {
     Write-Log 'STASHLESS_ENDPOINT and STASHLESS_TOKEN (or STASHLESS_TOKEN_NAME with KEY_VAULT_URL) are needed to post.'
     exit 1
 }
+$post = @{
+    Method = 'Post'; Uri = $endpointUrl; Body = $body; ContentType = 'application/json'
+    Headers = @{
+        Authorization = "Bearer $tokenValue"; Accept = 'application/json'
+        'User-Agent' = "stashless-collector-powershell/$($script:Version)"
+    }
+    TimeoutSec = $script:TimeoutSeconds; NoProxy = $true; MaximumRedirection = 0
+    SkipHttpErrorCheck = $true; ErrorAction = 'Stop'
+}
 try {
-    $response = Invoke-WebRequest -Method Post -Uri $endpointUrl -Headers @{ Authorization = "Bearer $tokenValue"; Accept = 'application/json'; 'User-Agent' = "stashless-collector-powershell/$($script:Version)" } -ContentType 'application/json' -Body $body -TimeoutSec $script:TimeoutSeconds -MaximumRedirection 0 -SkipHttpErrorCheck -ErrorAction Stop
+    $response = Invoke-WebRequest @post
 } catch {
     Write-Log "Stashless could not be reached ($($_.Exception.GetType().Name))."
     exit 1
@@ -724,6 +835,7 @@ try {
 $answerText = ([string] $response.Content)
 if ($answerText.Length -gt 300) { $answerText = $answerText.Substring(0, 300) }
 if ($response.StatusCode -eq 202) {
+    # Stashless's own answer is the one response ever logged: it says what was accepted, never a value of yours.
     Write-Log "Stashless answered 202: $answerText"
     exit $(if ($failed) { 1 } else { 0 })
 }

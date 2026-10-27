@@ -5,7 +5,16 @@ content. Exit 1 with the reason."""
 import sys
 import xml.etree.ElementTree as ET
 
-DENIED = {"PsoIntegrationConfiguration", "SMTPEmailServerHandling", "WorkFlowEnvSpecificConfigHandling", "ConnectConfigurationHandling", "ConnectivityInboxMessageHandling", "ConnectivityOutboxMessageHandling"}
+# The same list as IfsCloudClient::DENIED_PROJECTIONS in Stashless: the
+# projections that return passwords, tokens or raw message content.
+DENIED = {
+    "PsoIntegrationConfiguration",
+    "SMTPEmailServerHandling",
+    "WorkFlowEnvSpecificConfigHandling",
+    "ConnectConfigurationHandling",
+    "ConnectivityInboxMessageHandling",
+    "ConnectivityOutboxMessageHandling",
+}
 
 path = sys.argv[1]
 try:
@@ -14,7 +23,8 @@ except ET.ParseError as error:
     print("permission set: not well-formed XML (%s)" % error)
     sys.exit(1)
 
-text = open(path, encoding="utf-8").read()
+with open(path, encoding="utf-8") as handle:
+    text = handle.read()
 projections = [e.text.strip() for e in root.iter("PROJECTION") if e.text]
 denied = sorted(set(projections) & DENIED)
 if denied:

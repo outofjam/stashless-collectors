@@ -2,7 +2,7 @@
 
 Reference collectors for [Stashless](https://stashless.outofjam.com) production telemetry. A collector runs inside your own estate on a schedule, reads one IFS Cloud environment (and, optionally, the PSO gateway paired with it) with a read-only IAM client whose secret stays with you, and posts counts, timings and the installed release to Stashless with a collector token. Stashless never signs in to your production system and holds no credential for it: the token can post one report and read nothing back.
 
-Pick the edition that matches where you already run scheduled jobs. Every edition produces the same report from the same reads, and the [conformance check](scripts/conformance.sh) in this repository proves it on every change.
+Pick the edition that matches where you already run scheduled jobs. Every edition produces the same report from the same reads, and the [conformance check](scripts/conformance.sh) in this repository proves it on every change (the Python and PowerShell editions against the fixtures, the Docker image when Docker is present, and the Function edition by carrying the same file).
 
 | Edition | Runs where | Start here |
 | --- | --- | --- |
@@ -18,7 +18,7 @@ Pick the edition that matches where you already run scheduled jobs. Every editio
 3. Optionally opens a session on the PSO gateway for the PSO section, and closes it again.
 4. Posts one JSON report to `https://stashless.outofjam.com/api/telemetry/v1` with the token in a bearer header. The report format is published at [docs/schema-v1.json](docs/schema-v1.json) and served by Stashless at `/telemetry/schema/v1`; the reads and the arithmetic are in [docs/aggregation.md](docs/aggregation.md).
 
-A read that is refused costs only its own figure and is named in the report's heartbeat, so support can see what the collector could not read. Only a failed IFS sign-in or a refused post exits non-zero, and even then the heartbeat is posted.
+A read that is refused costs only its own figure and is named in the report's heartbeat, so support can see what the collector could not read. The exit code is 0 when IFS was read and the report accepted, and 1 when IFS could not be signed in to, a secret or the endpoint could not be had, or the post was refused; a failed IFS sign-in still posts the heartbeat so Stashless can show what went wrong.
 
 ## Before you start
 
@@ -28,7 +28,7 @@ In IFS Cloud, create the read-only IAM client and import the permission set [ifs
 
 ## Configuration
 
-Every setting is an environment variable. The PowerShell edition also takes each one as a parameter; the Python edition as a flag.
+Every setting is an environment variable. The PowerShell edition also takes each one as a parameter and the Python edition as a flag (`--ifs-url`, `--token-name`, and so on; `--help` lists them). The three secret flags and parameters (`--token`, `--ifs-client-secret`, `--pso-password` and their PowerShell twins) are for a one-off test from a shell: a value given that way shows in the process list, so a schedule should use the environment or the `*_NAME` form.
 
 | Variable | Value |
 | --- | --- |
@@ -41,6 +41,7 @@ Every setting is an environment variable. The PowerShell edition also takes each
 | `PSO_URL`, `PSO_ACCOUNT_ID`, `PSO_USER_NAME`, `PSO_PASSWORD` | Optional: the paired PSO environment, read with a PSO user; its figures land on the paired environment in Stashless |
 | `KEY_VAULT_URL` | Optional: a Key Vault the managed identity may read secrets from |
 | `IFS_CLIENT_SECRET_NAME`, `PSO_PASSWORD_NAME`, `STASHLESS_TOKEN_NAME` | Optional: the names of those secrets in that vault, used instead of the values |
+| `STASHLESS_COLLECTOR_IMPLEMENTATION` | Optional, Python only: `python` (default) or `docker`, what the report says reported; the Docker image sets it |
 
 A secret given by name is read with the managed identity of wherever the collector runs (Azure Automation, Functions, a VM or a container app with an identity), so no secret value is ever written into configuration.
 
@@ -52,7 +53,8 @@ Every edition takes `--fixtures fixtures` (`-Fixtures` in PowerShell) and reads 
 
 - The collector is read-only. Its only non-GET requests are the IAM token exchange, the one POST to Stashless and, when PSO is configured, opening and closing the gateway session.
 - No proxy and no redirect is ever followed, so the token and the session never travel to a host other than the one configured.
-- Nothing read is logged. Progress output names reads and counts.
+- Nothing read is logged. Progress output names reads and counts; the one response ever logged is Stashless's own reply, which says what was accepted and never repeats a value.
+- Every configured address must be `https://`; the collector refuses to start otherwise.
 - Revoke the token in Stashless and the next report is refused at once; rotate it and the old one keeps working for 24 hours.
 
 ## Versions

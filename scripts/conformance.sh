@@ -1,7 +1,8 @@
 #!/bin/sh
 # Proves every edition produces the expected payload from the fixtures,
 # and that the Function edition carries the same collector as python/.
-# Needs python3; pwsh and docker are used when present.
+# Needs python3; pwsh and docker are used when present (CI installs
+# pwsh, so the PowerShell edition is checked there too).
 set -eu
 cd "$(dirname "$0")/.."
 out="$(mktemp -d)"

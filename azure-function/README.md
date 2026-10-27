@@ -6,7 +6,7 @@ A ready-to-deploy Function app: one timer-triggered Python function that runs th
 
 You need the [Azure Functions Core Tools](https://learn.microsoft.com/azure/azure-functions/functions-run-local) (`func`) and the Azure CLI.
 
-1. Create a Function app (Python 3.11 or newer, Consumption or Flex Consumption plan) with a **system-assigned managed identity**:
+1. Create a Function app (Python 3.11 or newer: the collector itself runs on 3.9, but 3.11 is the oldest Python the Functions runtime still accepts for new apps; Consumption or Flex Consumption plan) with a **system-assigned managed identity**:
 
    ```sh
    az functionapp create --name <app> --resource-group <rg> --storage-account <storage> \
@@ -33,7 +33,7 @@ You need the [Azure Functions Core Tools](https://learn.microsoft.com/azure/azur
    ```sh
    func azure functionapp publish <app>
    ```
-5. Run it once from the portal (**Code + Test**, **Test/Run**) or wait for the first tick, then open **Monitor**: the invocation log ends with `Stashless answered 202`. In Stashless, the environment's status moves to **Reporting**. A failed sign-in or a refused report fails the invocation, so Application Insights alerts can watch it.
+5. Run it once from the portal (**Code + Test**, **Test/Run**) or wait for the first tick, then open **Monitor**: the invocation log ends with `Stashless answered 202` (the collector writes its progress through the Function's logger, so every line is in **Monitor** and Application Insights, not only on a console). In Stashless, the environment's status moves to **Reporting**. A failed sign-in or a refused report fails the invocation, so Application Insights alerts can watch it.
 
 ## Run locally
 
