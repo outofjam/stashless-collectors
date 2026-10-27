@@ -24,7 +24,7 @@ A read that is refused costs only its own figure and is named in the report's he
 
 In Stashless, on the production environment's edit page under **Telemetry**, choose the reporting interval and press **Create token**. The token is shown once. Keep it in your scheduler's secret store or in a Key Vault, never in a script.
 
-In IFS Cloud, create the read-only IAM client and import the permission set [ifs/CMDB_READ-permission-set.xml](ifs/CMDB_READ-permission-set.xml) exactly as for a connected environment (the Stashless setup guide, "Connect IFS Cloud"), this time in production. Keep its secret with the token. [ifs/README.md](ifs/README.md) says what the set grants.
+In IFS Cloud, create the read-only IAM client and import the permission set [ifs/STASHLESS_READ-permission-set.xml](ifs/STASHLESS_READ-permission-set.xml) exactly as for a connected environment (the Stashless setup guide, "Connect IFS Cloud"), this time in production. Keep its secret with the token. [ifs/README.md](ifs/README.md) says what the set grants.
 
 ## Configuration
 
