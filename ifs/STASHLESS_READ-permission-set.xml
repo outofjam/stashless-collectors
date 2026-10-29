@@ -1,10 +1,13 @@
 <?xml version="1.0"?>
 <!--
-  Stashless reference permission set. Import into each non-production IFS
-  Cloud environment (Solution Manager, Users and Permissions, Permission
-  Sets, Import), then grant it to the connector's service user. Every
-  entity is read only and no actions are granted; the connector never
-  writes. FrameworkServices is needed for the service update number.
+  Stashless reference permission set. Import into each IFS Cloud
+  environment Stashless reads (Solution Manager, Users and Permissions,
+  Permission Sets, Import), then grant it to the service user of the IAM
+  client that reads it: the connector's on a non-production environment,
+  or the collector's on a production environment that reports telemetry
+  (the collector makes the same reads). Every entity is read only and no
+  actions are granted; neither the connector nor the collector writes.
+  FrameworkServices is needed for the service update number.
   PsoIntegrationDatasets is needed for the PSO active dataset count.
   ApplicationMessagesHandling is needed for message timing; it reads queue,
   receiver, state and timestamps, never message content.
